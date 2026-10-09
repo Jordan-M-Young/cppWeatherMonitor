@@ -7,6 +7,8 @@
 #include <sqlite3.h>
 #include <string>
 #include <unordered_map>
+#include <iostream>
+#include <format>
 
 struct ObservationData {
   std::string station_id;
@@ -116,9 +118,12 @@ void printData(ObservationData &obs) {
   std::cout << obs.dewpoint_f << "\n";
 }
 
-char *getCtime() {
-  std::time_t currentTime = std::time(nullptr);
-  return std::ctime(&currentTime);
+std::string getCtime() {
+  auto now = std::chrono::system_clock::now();
+    
+  // Generates: YYYY-MM-DD HH:MM:SS
+  std::string sql_datetime = std::format("{:%Y-%m-%d %H:%M:%S}", now);
+  return sql_datetime;
 }
 
 void badRespHandler(cpr::Response &resp) {
@@ -160,7 +165,8 @@ int initTables(sqlite3 *db) {
                                   "dewpoint_f FLOAT,"
                                   "dewpoint_c FLOAT,"
                                   "visibility_mi FLOAT,"
-                                  "obshash TEXT NOT NULL UNIQUE);";
+                                  "obshash TEXT NOT NULL UNIQUE,"
+                                  "created_at DATETIME DEFAULT CURRENT_TIMESTAMP);";
 
   const char *createStationTableSQL = "CREATE TABLE IF NOT EXISTS stations ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -227,22 +233,21 @@ int observationInsert(sqlite3 *db, sqlite3_stmt *stmt, ObservationData &obs) {
                       SQLITE_STATIC);
     sqlite3_bind_text(stmt, 4, obs.weather.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 5, obs.wind_dir.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.temp_f.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.temp_c.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.relative_humidity.c_str(), -1,
+    sqlite3_bind_text(stmt, 6, obs.temp_f.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 7, obs.temp_c.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 8, obs.relative_humidity.c_str(), -1,
                       SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.wind_degrees.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.wind_mph.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.wind_gust_mph.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.wind_kt.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.wind_gust_kt.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.pressure_mb.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.pressure_in.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.dewpoint_f.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.dewpoint_c.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.visibility_mi.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.visibility_mi.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, obs.obshash.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 9, obs.wind_degrees.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 10, obs.wind_mph.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 11, obs.wind_gust_mph.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 12, obs.wind_kt.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 13, obs.wind_gust_kt.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 14, obs.pressure_mb.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 15, obs.pressure_in.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 16, obs.dewpoint_f.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 17, obs.dewpoint_c.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 18, obs.visibility_mi.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 19, obs.obshash.c_str(), -1, SQLITE_STATIC);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
       std::cerr << "Execution failed." << std::endl;
@@ -284,9 +289,9 @@ int main() {
 
       std::string xml = resp.text;
       size_t hashedXml = stringHasher(xml);
-
+      std::string runTime = getCtime();
       if (hashCache[abbrev] == hashedXml) {
-          std::cout << "Observation Unchanged as of" << getCtime() << "\n";
+          std::cout << "Observation Unchanged as of" << runTime << "\n";
           std::this_thread::sleep_for(std::chrono::hours(1));
           continue;
       }
@@ -307,6 +312,7 @@ int main() {
       if (oiCode) {
         std::cout << abbrev << " | " <<"OBSERVATION INSERT ERROR" << "\n";
       }
+      hashCache[abbrev] = hashedXml;
       std::this_thread::sleep_for(std::chrono::hours(1));
 
 
